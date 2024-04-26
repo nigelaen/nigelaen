@@ -1,0 +1,128 @@
+# Introducing the game
+print("Embark on a Journey to the Center of the Earth as geologist professor.\n\t"
+      "In this game,you will travel to the center of the Earth in search for your\n\t\t" 
+      "long-lost brother with an accompanying guide.During the process, you will \n\t\t\t"
+      "discover mysteries hidden underneath the Earth and all the treasures it holds.\n\t\t\t\t" 
+      "Explore the possibilities,beyond your imagination by pressing enter to begin!\n\t\t\t\t\t\t")
+input("Press enter to Begin")
+
+# User inputs their name to start the game
+name = input("Enter your name")
+
+while name == "":
+    print("Please type something")  # Prompt the player to type their name
+    name = input("Enter your name ")  # Exit strategy
+
+print(f"Welcome Professor {name}.Start your game by picking 2 tools you may need\
+        to search for your brother")
+
+
+# Define the initial list of tools
+tools = ["map", "compass", "phone", "laptop"]
+print("*Hint*: 'Pick 1 tool at a time e.g map and press enter'")
+
+selected_tools = []  # List to store the user's selected tools
+max_tools = 2  # Maximum number of tools the user can choose
+
+while len(selected_tools) < max_tools:
+    print(f"Choose {max_tools - len(selected_tools)} tools from: {', '.join(tools)}")
+
+    user_tool = input("Pick your tool: ").lower()
+    
+
+    if user_tool in tools and user_tool not in selected_tools:
+        selected_tools.append(user_tool)
+        print(f"Your selected tools: {', '.join(selected_tools)}")
+    elif user_tool in selected_tools:
+        print(f"You've already chosen '{user_tool}'. Choose a different tool.")
+    else:
+        print("Invalid choice or tool already selected. Try again.")
+
+print("You've selected the maximum number of tools.")
+print(f"Final selected tools: {', '.join(selected_tools)}")
+input("Press Enter & proceed into the unknown abyss")
+
+# Bringing in the random element for a guessing game
+import random
+print("In the abyss you've met an old wizard who will give you directions to your brothers location.")
+print("Welcome explorer.You are requested to guess a number between 1 and 50 to unlock the directions")
+print("*Hint*: For every guess you are a provided a range e.g\
+               If 25 is low and 30 is high your guess should be between that range")
+
+low = 1
+high = 50
+guesses = 0
+
+number = random.randint(low, high)
+
+while True:  # Infinite number of chances
+    guess = int(input(f"Enter a number between ({low}-{high}):"))  # Clue given to the player
+    guesses += 1  # Incrementing our variable by 1
+
+    if guess < number:
+        print(f"You guessed {guess} which is low,try a number higher")  # Encourage the user to keep guessing
+    elif guess > number:
+        print(f"You guessed {guess} which is high,try a number lower")
+    else:
+        print(f"{guess} is correct.")
+        break  # Break the loop to avoid an infinite loop
+
+print(f"This stage took you {guesses} guesses.You've unlocked the next stage of the game.")
+input("Press Enter to proceed")
+
+print("In your last stage, face the monster that has kept your brother captive and defeat it")
+
+import random
+
+def initialize_player_health():
+    return 100
+
+def decrease_health(current_health, amount):
+    return current_health - amount
+
+def get_health(current_health):
+    return current_health
+
+def encounter_monsters():
+    player_health = initialize_player_health()
+    player_damage = random.randint(5, 10)
+    monsters = ["Goblin", "Orc", "Dragon"]
+
+    print("Welcome to the encounter with monsters,Defeat the monster!")
+
+    for enemy in monsters:
+        enemy_health = random.randint(50, 100)
+        enemy_damage = random.randint(5, 10)
+
+        print(f"You encounter a {enemy}!")
+
+        while player_health > 0 and enemy_health > 0:
+            print(f"Player Health: {player_health} | {enemy} Health: {enemy_health}")
+            action = input("Choose your action (A)ttack or (R)un: ").lower()
+
+            if action == "a":  # Player attacks the enemy
+                print("You attack the enemy!")
+                enemy_health -= player_damage
+                if enemy_health > 0:
+                    print(f"The {enemy} attacks back!")
+                    player_health = decrease_health(player_health, enemy_damage)
+            elif action == "r":  # Player chooses to run away
+                print(f"You attempt to run away from the {enemy}.")
+                break
+            else:
+                print("Invalid action! Choose 'A' to attack or 'R' to run.")
+
+        if player_health <= 0:
+            print("You've been defeated!")
+            print("Thank you for playing!!!!")
+            break  # End the game if the player loses
+        elif enemy_health <= 0:
+            print(f"You defeated the {enemy}!!! Congratulations, your brother has been released ")
+            input("Press Enter and travel back to the surface with your brother?")
+            print("Well done!!! You've reached the surface. Thank you for playing.")
+            break
+        else:
+            print("You managed to escape the encounter.")
+
+# Encountering monsters in the game with initial player health of 100
+encounter_monsters()
