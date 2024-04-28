@@ -1,0 +1,345 @@
+#importing python libraries
+import numpy             as np
+import pandas as pd 
+import seaborn as sns  
+import matplotlib.pyplot as plt  
+
+# classification-specific libraries
+import phik                           # phi coefficient
+import statsmodels.formula.api as smf # logistic regression
+import sklearn.linear_model           # logistic regression
+
+
+# preprocessing and testing
+from sklearn.preprocessing import power_transform    # yeo-johnson
+from sklearn.preprocessing import StandardScaler     # standard scaler
+from sklearn.model_selection import train_test_split # train-test split
+from sklearn.metrics import (confusion_matrix,
+                             roc_auc_score, precision_score, recall_score)
+
+
+## importing data ##
+
+# reading modeling data into Python
+modeling_data = "./birthweight.xlsx"
+
+
+# calling this df_train
+df_train = pd.read_excel(io         = modeling_data,
+                         header     = 0,
+                         index_col  = 'bwt_id')
+
+
+# reading testing data into Python
+testing_data = "./kaggle_test_data.csv"
+
+# calling this df_test
+df_test = pd.read_csv  (testing_data,
+                        header     = 0,
+                        index_col  = 'bwt_id')
+# concatenating datasets together for mv analysis and feature engineering
+df_train['set'] = 'Not Kaggle'
+df_test ['set'] = 'Kaggle'
+
+# concatenating both datasets together for mv and feature engineering
+df= pd.concat(objs = [df_train, df_test],
+                    axis = 0,
+                    ignore_index = False)
+# Impute 0 for missing values in the 'cigs' column - This means they dont smoke
+df['cigs'].fillna(0, inplace=True)
+
+# Impute 0 for missing values in the 'drinks' column - This means they dont drink
+df['drink'].fillna(0, inplace=True)
+
+# Impute 0 for missing values in the 'npvis' column
+df['npvis'].fillna(0, inplace=True)
+
+# Impute 0 for missing values in the 'monpre' column
+df['monpre'].fillna(0, inplace=True)
+
+# Calculate the median of the 'npvis' column
+npvis_median = df['npvis'].median()
+
+# Impute missing values in 'npvis' with its median
+df['npvis'].fillna(npvis_median, inplace=True)
+
+# List of columns to impute with median values
+columns_to_impute = ['mage','fage', 'feduc', 'omaps', 'fmaps', 'meduc','male','mwhte','mblck','moth','fwhte','fblck','foth','bwght']
+
+# Loop through each column and impute missing values with the median
+for column in columns_to_impute:
+    median_value = df[column].median()
+    df[column].fillna(median_value, inplace=True)
+
+# For crosschecking correlation to answer question 
+
+# Exclude non-numeric columns first. Assuming 'bwt_id' is the problematic column:
+numeric_cols = df.select_dtypes(include=[np.number])
+
+# Now calculate Pearson correlation with the 'health_status' column, safely:
+correlation_matrix = numeric_cols.corr()
+correlations_with_health_status = correlation_matrix['bwght'].sort_values(ascending=False)
+
+print(correlations_with_health_status)
+
+#Feature ENgineeering
+
+# Categorizing / Classfying mothers age 'mage' into three groups
+age_bins = [15, 24, 34, 44]  # Define bins edges
+age_labels = ['mteen', 'myouth', 'madult']  # Define labels for each bin
+df['age_category'] = pd.cut(df['mage'], bins=age_bins, labels=age_labels, right=True)
+
+# Creating dummy variables for the age categories
+age_dummies = pd.get_dummies(df['age_category'], prefix='', prefix_sep='')
+
+# Renaming columns manually to match the desired output
+age_dummies.columns = age_labels
+
+# Joining the dummy variables back to the original DataFrame
+df = pd.concat([df, age_dummies], axis=1)
+
+# Converting Boolean columns in to binary values in the 'df'
+df['mteen'] = df['mteen'].astype(int)
+df['myouth'] = df['myouth'].astype(int)
+df['madult'] = df['madult'].astype(int)
+
+# Categorizing the prenatal visits to diffrent trimesters which is 1st ,2nd & 3rd trimester
+
+# Categorizing 'monpre' into three groups
+trimester_bins = [0, 3, 6, 9]  # Define bins edges
+trimester_labels = ['onetrimester', 'twotrimester', 'threetrimester']  # Define labels for each bin
+df['trimester_category'] = pd.cut(df['monpre'], bins=trimester_bins, labels=trimester_labels, right=True, include_lowest=True)
+
+# If you need to create dummy variables for the trimester categories
+trimester_dummies = pd.get_dummies(df['trimester_category'])
+
+# Joining the dummy variables back to the original DataFrame
+df = pd.concat([df, trimester_dummies], axis=1)
+
+# Converting Boolean columns in to binary values in the 'df'
+df['onetrimester'] = df['onetrimester'].astype(int)
+df['twotrimester'] = df['twotrimester'].astype(int)
+df['threetrimester'] = df['threetrimester'].astype(int)
+
+# Categorizing mother's education to 3 diffrent where its ('Primarysch', 'Highsch', 'College')
+
+# Categorizing 'meduc' into three groups based on education years
+education_bins = [2, 8, 12, 17]  # Define bins edges, starting from 2 to ensure inclusion of 3 as the lowest bin starts from the next integer
+education_labels = ['Primarysch', 'Highsch', 'College']  # Define labels for each bin
+df['education_level'] = pd.cut(df['meduc'], bins=education_bins, labels=education_labels, right=True, include_lowest=True)
+
+# Creating dummy variables for the education level categories
+education_dummies = pd.get_dummies(df['education_level'])
+
+# Joining the dummy variables back to the original DataFrame
+df = pd.concat([df, education_dummies], axis=1)
+
+# Converting Boolean columns in to binary values in the 'df'
+df['Primarysch'] = df['Primarysch'].astype(int)
+df['Highsch'] = df['Highsch'].astype(int)
+df['College'] = df['College'].astype(int)
+#!# setting my response variable 
+
+#!##############################!#
+
+y_variable = "low_bwght"
+ standard_scaler
+########################################
+def standard_scaler(df):
+    """
+    Standardizes a dataset (mean = 0, variance = 1). Returns a new DataFrame.
+    Requires sklearn.preprocessing.StandardScaler()
+    
+    PARAMETERS
+    ----------
+    df     | DataFrame to be used for scaling
+    """
+
+    # INSTANTIATING a StandardScaler() object
+    scaler = StandardScaler(copy = True)
+
+
+    # FITTING the scaler with the data
+    scaler.fit(df)
+
+
+    # TRANSFORMING our data after fit
+    x_scaled = scaler.transform(df)
+
+    
+    # converting scaled data into a DataFrame
+    new_df = pd.DataFrame(x_scaled)
+
+
+    # reattaching column names
+    new_df.columns = list(df.columns)
+    
+    return new_df
+
+
+
+########################################
+## visual_cm
+########################################
+def visual_cm(true_y, pred_y, labels = None):
+    """
+Creates a visualization of a confusion matrix.
+
+PARAMETERS
+----------
+true_y : true values for the response variable
+pred_y : predicted values for the response variable
+labels : , default None
+    """
+    # visualizing the confusion matrix
+
+    # setting labels
+    lbls = labels
+    
+
+    # declaring a confusion matrix object
+    cm = confusion_matrix(y_true = true_y,
+                          y_pred = pred_y)
+
+
+    # heatmap
+    sns.heatmap(cm,
+                annot       = True,
+                xticklabels = lbls,
+                yticklabels = lbls,
+                cmap        = 'Blues',
+                fmt         = 'g')
+
+
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.title('Confusion Matrix of the Classifier')
+    plt.show()
+# Plotting A Heatmap
+
+# Select only numerical columns from df
+numerical_df = df.select_dtypes(include=['float64', 'int64'])
+
+# Calculate Pearson correlation coefficients between numerical variables
+correlation_matrix = numerical_df.corr()
+
+# Extract correlations with 'low_bwght'
+correlations_with_bwght = correlation_matrix['low_bwght'].sort_values(ascending=False)
+
+print("\nHeatmap of Correlation Matrix:")
+plt.figure(figsize=(14, 14))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f")
+plt.title('Heatmap of Correlation Matrix')
+plt.show()
+
+# Print sorted correlations with 'low_bwght'
+print("\nSorted Correlations with 'low_bwght':\n", correlations_with_bwght)
+
+## parsing out testing data (needed for later) ##
+
+# dataset for kaggle
+kaggle_data = df[ df['set'] == 'Kaggle' ].copy()
+
+
+# dataset for model building
+df         = df[ df['set'] == 'Not Kaggle' ].copy()
+
+
+# dropping set identifier (kaggle)
+kaggle_data.drop(labels = 'set',
+                 axis = 1,
+                 inplace = True)
+
+
+# dropping set identifier (model building)
+df.drop(labels = 'set',
+        axis = 1,
+        inplace = True)
+# Dropping columns after the event 
+df = df.drop([ 'omaps', 'fmaps', 'education_level',
+                        'trimester_category', 'bwght','age_category'], axis = 1)
+# declaring explanatory variables
+df_data = x_data_st
+
+
+# declaring response variable
+df_target = df.loc[ : , 'low_bwght']
+
+#Creating a perfect mix of features
+
+x_features = ['mage', 'meduc', 'monpre', 'npvis', 'fage', 'feduc', 'cigs', 
+              'drink', 'male', 'mwhte', 'mblck', 'moth', 'fwhte', 'fblck', 
+              'foth','onetrimester','twotrimester', 'threetrimester', 'Primarysch',
+              'Highsch', 'College','mteen', 'myouth', 'madult'] 
+# creating a dictionary to store candidate models
+
+candidate_dict = {
+    # Hypothetical full model including what might be relevant predictors
+    'logit_full': ['mage', 'meduc', 'monpre', 'npvis', 'fage', 'feduc', 'cigs', 'drink', 
+                   'male', 'mwhte', 'mblck', 'moth', 'fwhte', 'fblck', 'foth', 
+                   'mteen', 'myouth', 'madult', 'onetrimester', 'twotrimester', 'threetrimester', 
+                   'Primarysch', 'Highsch', 'College'],
+    
+   # significant variables only (set 2)
+    'logit_sig': ['mage', 'meduc', 'cigs', 'drink', 'male', 'monpre', 'myouth', 'madult', 
+                  'onetrimester', 'twotrimester', 'Primarysch', 'Highsch','npvis']
+}
+
+#INSTANTIATING a logistic regression model
+logreg = sklearn.linear_model.LogisticRegression(solver = 'lbfgs',
+                                                 C = 1,
+                                                 random_state = 702)
+
+
+# FITTING the training data
+logreg_fit = logreg.fit(x_train, y_train)
+
+
+# PREDICTING based on the testing set
+logreg_pred = logreg_fit.predict(x_test)
+
+# saving scoring data for future use
+train_score = round(logreg_fit.score(x_train, y_train), ndigits = 4) # train accuracy
+test_score  = round(logreg_fit.score(x_test, y_test),   ndigits = 4) # test accuracy
+tt_gap      = round(abs(train_score - test_score),      ndigits = 4) # gap
+
+# displaying and saving the gap between training and testing
+print(f"""\
+Training ACCURACY: {train_score}
+Testing  ACCURACY: {test_score}
+Train-Test Gap   : {tt_gap}
+""") 
+
+# unpacking the confusion matrix
+logreg_tn, \
+logreg_fp, \
+logreg_fn, \
+logreg_tp = confusion_matrix(y_true = y_test, y_pred = logreg_pred).ravel()
+
+
+# printing each result one-by-one
+print(f"""
+True Negatives : {logreg_tn}
+False Positives: {logreg_fp}
+False Negatives: {logreg_fn}
+True Positives : {logreg_tp}
+""")
+
+# FITTING the training data
+rf_default_fit = rf_default.fit(x_train, y_train)
+
+
+# PREDICTING based on the testing set
+rf_default_fit_pred = rf_default_fit.predict(x_test)
+
+
+# SCORING the results
+print('Training ACCURACY:', round(rf_default_fit.score(x_train, y_train), ndigits = 4))
+print('Testing  ACCURACY:', round(rf_default_fit.score(x_test , y_test ), ndigits = 4))
+
+
+# saving AUC score
+print('AUC Score        :', round(roc_auc_score(y_true  = y_test,
+                                                y_score = rf_default_fit_pred), ndigits = 4))
+
+plot_feature_importances(model=rf_default_fit,train=x_train)
