@@ -1,0 +1,719 @@
+## importing libraries ##
+
+import numpy             as np                       # mathematical essentials
+import pandas            as pd                       # data science essentials
+import sklearn.linear_model                          # linear models
+from sklearn.model_selection import train_test_split # train/test split
+from sklearn.model_selection import train_test_split, GridSearchCV # train/test split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression, Lasso, Ridge, SGDRegressor
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+# setting pandas print options 
+pd.set_option('display.max_rows', 500)
+pd.set_option('display.max_columns', 500)
+pd.set_option('display.width', 1000)
+## importing data ##
+
+# reading modeling data into Python
+modeling_data = './datasets/train.xlsx'
+
+# calling this df_train
+df_train = pd.read_excel(io         = modeling_data,
+                         sheet_name = 'data',
+                         header     = 0,
+                         index_col  = 'ID')
+
+
+
+# reading testing data into Python
+testing_data = './datasets/test.xlsx'
+
+# calling this df_test
+df_test = pd.read_excel(io         = testing_data,
+                        sheet_name = 'data',
+                        header     = 0,
+                        index_col  = 'ID')
+# concatenating datasets together for mv analysis and feature engineering
+df_train['set'] = 'Not Kaggle'
+df_test ['set'] = 'Kaggle'
+
+# concatenating both datasets together for mv and feature engineering
+df_full = pd.concat(objs = [df_train, df_test],
+                    axis = 0,
+                    ignore_index = False)
+# checking df for available features
+df_full.head(n = 5)
+# checking available features by columns
+df_full.columns
+# Information about each variable
+df_full.info(verbose = True)
+
+# descriptive statistics for numeric data
+df_full_stats = df_full.describe(include = 'number').round(decimals = 2)
+
+# checking results
+df_full_stats
+#!##############################!#
+#!# set your response variable #!#
+#!##############################!#
+y_variable ='RENTALS' 
+# developing a histogram using HISTOGRAM FOR Y VARIABLE
+sns.histplot(data   = df_full,
+             x      = 'RENTALS',
+             kde    = True)
+
+
+# title and axis labels
+plt.title(label   = "Distribution of RENTALS")
+plt.xlabel(xlabel = "RENTALS")
+plt.ylabel(ylabel = "Count")
+
+# displaying the histogram
+plt.show()
+# analyzing feature distributions at a larger scale to have broader view
+df_full.iloc[ 1:, : ] 
+
+#The histplot above shows a Rentals dataset which is skewed 
+#The histplot is skewed with 0's and missing values which will be later imputed
+# Base Modelling
+
+# Selecting only numeric data types for correlation analysis
+df_numeric = df_full.select_dtypes(include=[np.number])
+
+# Developing a correlation matrix on numeric data
+df_corr = df_numeric.corr(method='pearson')
+
+# Filtering results to show correlations with 'RENTALS', 
+correlation_with_rentals = df_corr['RENTALS'].sort_values(ascending=False)
+print(correlation_with_rentals)
+#Develop a scatter plot between Rentals and Temperature as it has the stongest relation
+# setting figure size
+fig, ax = plt.subplots(figsize = (9, 6))
+
+
+# developing a scatterplot
+sns.scatterplot(x    = 'RENTALS',
+                y    = 'Temperature(F)',
+                data = df_full)
+
+# SHOWing the results
+plt.show()
+#Checking the Rsquared and F-statistic value
+
+# importing an additional package
+import statsmodels.formula.api as smf
+
+# Step 1: INSTANTIATE a model object
+lm_best = smf.ols(formula = """RENTALS ~ Q("Temperature(F)") + Q("Humidity(%)") +
+        Q("Wind speed (mph)") + Q("Visibility(miles)") + Q("DewPointTemperature(F)") + 
+        Q("Snowfall(in)") + Q("Rainfall(in)") + Q("SolarRadiation(MJ/m2)")""",
+                  data = df_full)
+
+# Step 2: FIT the data into the model object
+results = lm_best.fit()
+
+# Step 3: analyze the SUMMARY output
+print(results.summary())
+# Checking for missing values
+print(df_full.isnull().sum())
+#Check by first 10 rows of the column
+df_full.head(n=10)
+#Handling missing values and Imputation
+
+#Imputing Rentals with 0 as this assumes they were no rentals on the particular day or period 
+#using knn for to impute weather variables,Assumed that if the weather is sunny for particular day it might be sunny the following day with nearest neighbours.
+
+#Import the nessecary library
+from sklearn.impute import KNNImputer
+import pandas as pd
+import numpy as np
+
+# Initialize the KNN Imputer
+knn_imputer = KNNImputer(n_neighbors=7)  # You can adjust the number of neighbors is 7 representing a full week
+
+# Select columns to impute using KNN (weather-related features)
+columns_to_impute_knn = ['Visibility(miles)', 'DewPointTemperature(F)', 'SolarRadiation(MJ/m2)']
+
+# Perform the imputation on selected columns
+df_full[columns_to_impute_knn] = knn_imputer.fit_transform(df_full[columns_to_impute_knn])
+
+# Imputing missing values in 'RENTALS' with 0
+df_full['RENTALS'].fillna(0, inplace=True)
+#showing all the 4 columns their distribution after imputation
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+
+# List of columns for plot the distribution
+columns_to_plot = ['Visibility(miles)', 'DewPointTemperature(F)', 'SolarRadiation(MJ/m2)', 'RENTALS']
+
+# Loop through each column and create a separate histogram
+for column in columns_to_plot:
+    sns.histplot(x=column, data=df_full, kde=True)
+    
+    # Adding title and label dynamically based on the column name
+    plt.title(label=f'Distribution of {column}')
+    plt.xlabel(xlabel=column)
+    plt.ylabel(ylabel='Count')
+    
+    # Displaying the plot
+    plt.show()
+# Check if the missing values are filled
+print(df_full[['Visibility(miles)', 'DewPointTemperature(F)', 'SolarRadiation(MJ/m2)', 'RENTALS']].isnull().sum())
+#Checking for any missing values after imputation
+print(df_full.isnull().sum())
+#Transformations
+
+#Developing a histogram to analyz the RENTALS
+sns.histplot(data   = df_full,
+             x      = 'RENTALS',
+             kde    = True)
+
+
+# title and axis labels
+plt.title(label   = "Original Distribution of RENTALS")
+plt.xlabel(xlabel = "RENTALS") # avoiding using dataset labels
+plt.ylabel(ylabel = "Count")
+
+# displaying the histogram
+plt.show()
+# log transforming RENTALS and saving it to the dataset
+df_full['log_Rentals'] = np.log1p(df_full['RENTALS'])
+#Showing  log Rentals histplot
+
+# developing a histogram using HISTPLOT
+sns.histplot(data   = df_full,
+             x      = 'log_Rentals',
+             kde    = True)
+
+
+# title and axis labels
+plt.title(label   = "Logarithmic Distribution of RENTALS")
+plt.xlabel(xlabel = "RENTALS") # avoiding using dataset labels
+plt.ylabel(ylabel = "Count")
+
+# displaying the histogram
+plt.show()
+#skewness in Y can indicate skewness in X, its therefore important to check all variables
+
+# Calculating skewness for only numerical columns in df_full
+numerical_skewness = df_full.select_dtypes(include=[np.number]).skew(axis=0).round(decimals=2)
+
+print(numerical_skewness)
+#Logarithmically transform any X-features with value greater than 1
+# log transforming skewed features
+df_full['log_Windspeed(mph)']         = np.log1p(df_full['Wind speed (mph)'])
+df_full['log_Rainfall(in)']           = np.log1p(df_full['Rainfall(in)'])
+df_full['log_Snowfall(in)']           = np.log1p(df_full['Snowfall(in)'])
+df_full['log_SolarRadiation(MJ/m2)']  = np.log1p(df_full['SolarRadiation(MJ/m2)'])
+
+#displaying first few rows to verify changes
+df_full.head()
+# skewness BEFORE logarithmic transformations and After
+numerical_skewness = df_full.select_dtypes(include=[np.number]).skew(axis=0).round(decimals=2)
+
+print(numerical_skewness)
+# analyzing (Pearson) correlations
+
+# Selecting only numeric columns from df_full
+numeric_df_full = df_full.select_dtypes(include=[np.number])
+
+# Analyzing (Pearson) correlations among numeric columns only
+df_corr = numeric_df_full.corr(method='pearson').round(2)
+
+# Extracting correlations with 'RENTALS' and 'log_Rentals', sorting by 'RENTALS'
+correlation_with_rentals = df_corr.loc[:, ['RENTALS', 'log_Rentals']].sort_values(by='RENTALS', ascending=False)
+
+print(correlation_with_rentals)
+## Feature Engineering ##
+
+#Converting string values with YES AND NO STRINGS TO 0 AND 1
+
+# Mapping "No" to 0 and "Yes" to 1 in both "Holiday" and "FunctioningDay" columns
+df_full['Holiday'] = df_full['Holiday'].replace({'No': 0, 'Yes': 1})
+df_full['FunctioningDay'] = df_full['FunctioningDay'].replace({'No': 0, 'Yes': 1})
+
+# Displaying the first few rows to verify the changes
+print(df_full[['Holiday', 'FunctioningDay']].head())
+# Converting 'Rainfall' and 'Snowfall' to categorical (presence vs. absence)
+df_full['Rainfall_Presence'] = (df_full['Rainfall(in)'] > 0).astype(int)
+df_full['Snowfall_Presence'] = (df_full['Snowfall(in)'] > 0).astype(int)
+
+# Displaying the first few rows to verify the changes
+print(df_full[['Rainfall(in)', 'Rainfall_Presence', 'Snowfall(in)', 'Snowfall_Presence']].head())
+#Subsetting to check features the have the highest amount of Zero's 
+
+# counting the number of zeroes
+Rainfall_Presence_zeroes          = len(df_full['Rainfall_Presence'][df_full['Rainfall_Presence'] == 0])
+Snowfall_Presence_zeroes          = len(df_full['Snowfall_Presence'][df_full['Snowfall_Presence'] == 0])
+Holiday_zeroes                    = len(df_full['Holiday'][df_full['Holiday'] == 0])
+FunctioningDay_zeroes             = len(df_full['FunctioningDay'][df_full['FunctioningDay'] == 0])
+
+
+
+# printing a table of the results
+print(f"""
+                 No\t\tYes
+               ---------------------
+Rainfall       | {Rainfall_Presence_zeroes}\t\t{len(df_full) - Rainfall_Presence_zeroes}
+Snowfall       | {Snowfall_Presence_zeroes }\t\t{len(df_full) - Snowfall_Presence_zeroes }
+Holiday        | {Holiday_zeroes}\t\t{len(df_full) - Holiday_zeroes}
+Functioning Day| {FunctioningDay_zeroes}\t\t{len(df_full) - FunctioningDay_zeroes}
+""")
+#Rule of thumb,engineer flag features with 50 observations in both the 'yes' and 'no' columns.
+
+# placeholder variables
+df_full['has_Holiday']             = 0
+df_full['has_FunctioningDay']     = 0
+df_full['has_Rainfall']            = 0
+
+
+
+for index, value in df_full.iterrows():
+    
+
+        # Rainfall 
+    if df_full.loc[index, 'Rainfall(in)'] > 0:
+        df_full.loc[index, 'has_Rainfall'] = 1
+    
+    # Holiday 
+    if df_full.loc[index, 'Holiday'] > 0:
+        df_full.loc[index, 'has_Holiday'] = 1
+        
+        
+    # Functioning day
+    if df_full.loc[index, 'FunctioningDay'] > 0:
+        df_full.loc[index, 'has_FunctioningDay'] = 1
+
+# checking results
+df_full[  ['has_Holiday', 'has_FunctioningDay', 'has_Rainfall']  ].head(n = 5)
+#Extract features from the DateHour column, seperating these to their individual relates
+
+# Convert 'DateHour' to datetime format if not already done
+df_full['DateHour'] = pd.to_datetime(df_full['DateHour'])
+
+# Extracting Year, Month, and converting Weekday to numerical (Monday=0, Sunday=6)
+df_full['Year'] = df_full['DateHour'].dt.year
+df_full['Month'] = df_full['DateHour'].dt.month
+df_full['Weekday'] = df_full['DateHour'].dt.weekday 
+df_full['Hour'] = df_full['DateHour'].dt.hour
+
+# Categorizing temperature into numerical categories
+df_full['temp_category'] = pd.cut(df_full['Temperature(F)'], bins=[-np.inf, 32, 60, 80, np.inf], labels=[1, 2, 3, 4])
+
+# Now, you can drop the 'DateHour' column if it's no longer needed
+df_full = df_full.drop(columns=['DateHour'])
+
+# Display the first few rows to see the engineered features
+print(df_full[['Year', 'Month', 'Weekday', 'temp_category', 'Hour']].head())
+#dropping the set column as its str
+df_full = df_full.drop(columns=['set'])
+#Partitioning Data
+
+## parsing out testing data (needed for later) ##
+
+# dataset for kaggle
+kaggle_data = df_full[ df_full['set'] == 'Kaggle' ].copy()
+
+
+# dataset for model building
+df = df_full[ df_full['set'] == 'Not Kaggle' ].copy()
+
+
+# dropping set identifier (kaggle)
+kaggle_data.drop(labels = 'set',
+                 axis = 1,
+                 inplace = True)
+
+
+# dropping set identifier (model building)
+df.drop(labels = 'set',
+        axis = 1,
+        inplace = True)
+#Checking the correlation of the newly engineered features
+
+# developing a correlation matrix
+
+new_corr = df_full.corr(method = 'pearson').round(decimals = 2)
+
+# checking the correlations of the newly-created variables with Sale_Price
+new_corr.loc[ ['has_Holiday', 'has_FunctioningDay', 'has_Rainfall','Year','Month','Weekday','temp_category','Hour'
+               ],
+              ['RENTALS','log_Rentals'] ].sort_values(by = 'RENTALS',
+                                                             ascending = False)
+#Standardizing the data
+
+
+# INSTANTIATING a StandardScaler() object
+scaler = StandardScaler()
+
+
+# FITTING the scaler with the data
+scaler.fit(df_full)
+
+
+# TRANSFORMING our data after fit
+x_scaled = scaler.transform(df_full)
+
+
+# converting scaled data into a DataFrame
+x_scaled_df = pd.DataFrame(x_scaled)
+
+
+# checking the results
+x_scaled_df.describe(include = 'number').round(decimals = 2)
+#Adding the columns back
+
+# Selecting only numeric columns for scaling
+numeric_columns = df_full.select_dtypes(include=['int64', 'float64']).columns
+df_numeric = df_full[numeric_columns]
+
+# Proceed with scaling df_numeric
+scaler.fit(df_numeric)
+x_scaled = scaler.transform(df_numeric)
+
+# Convert the scaled data back into a DataFrame
+x_scaled_df = pd.DataFrame(x_scaled, columns=numeric_columns)
+
+# Compute variance for numerical columns only in df_numeric (before scaling)
+numerical_var_before_scaling = df_numeric.var()
+
+# Compute variance for the scaled data in x_scaled_df
+numerical_var_after_scaling = x_scaled_df.var()
+
+# Print pre- and post-scaling variance of the numerical data
+print(f"""
+Dataset BEFORE Scaling
+----------------------
+{numerical_var_before_scaling}
+
+
+Dataset AFTER Scaling
+----------------------
+{numerical_var_after_scaling}
+""")
+#Showing Pre- and Post-Standardization Correlation Analysis
+##############################################################################
+# Unscaled Dataset
+##############################################################################
+
+# subsetting the original dataset
+df_full_subset = df_full.loc[ : , ['Temperature(F)',
+                                        'Humidity(%)',
+                                        'FunctioningDay',
+                                        'has_FunctioningDay',
+                                        'has_Rainfall',
+                                        'has_Holiday']]
+
+
+# UNSCALED correlation matrix
+df_corr = df_full_subset.corr().round(2)
+
+
+# heatmap of UNSCALED correlations
+sns.heatmap(df_corr,
+            cmap = 'coolwarm',
+            square = True,
+            annot = True,
+            cbar = False,
+            linecolor  = 'black', 
+            linewidths = 0.5)
+
+
+plt.show()
+
+##############################################################################
+# Scaled Dataset
+##############################################################################
+
+# SCALED correlation matrix
+df_scaled_corr = x_scaled_df.loc[ : , ['Temperature(F)',
+                                        'Humidity(%)',
+                                        'FunctioningDay',
+                                        'has_FunctioningDay',
+                                        'has_Rainfall',
+                                        'has_Holiday']].corr().round(2)
+
+
+# titling the plot
+plt.title("BEFORE Standardization")
+
+
+
+# heatmap of SCALED correlations
+sns.heatmap(df_scaled_corr,
+            cmap = 'coolwarm',
+            square = True,
+            annot = True,
+            cbar = False,
+            linecolor  = 'black',
+            linewidths = 0.5)
+
+
+# titling the plot
+plt.title("AFTER Standardization")
+plt.show()
+#Checking Data after standardization
+df_full.head()
+#!###########################!#
+#!# choose your x-variables #!#
+#!###########################!#
+x_features = ['Temperature(F)',
+                'Humidity(%)',
+                'Wind speed (mph)',
+                'Holiday',
+                'FunctioningDay',
+                'Visibility(miles)',
+                 'temp_category',
+                 'Month',
+                 'Weekday',
+                    'Hour',
+                  'Rainfall_Presence',
+                  'Snowfall_Presence'] # this should be a list
+## ########################### ##
+## DON'T CHANGE THE CODE BELOW ##
+## ########################### ##
+
+# prepping data for train-test split
+y_data = df[y_variable]
+
+
+# removing non-numeric columns and missing values
+x_data = df[x_features].copy().select_dtypes(include=[int, float]).dropna(axis = 1)
+
+
+# storing remaining x_features after the step above
+x_features = list(x_data.columns)
+
+
+# train-test split (to validate the model)
+x_train, x_test, y_train, y_test = train_test_split(x_data, 
+                                                    y_data, 
+                                                    test_size    = 0.25,
+                                                    random_state = 702 )
+
+
+# results of train-test split
+print(f"""
+Original Dataset Dimensions
+---------------------------
+Observations (Rows): {df.shape[0]}
+Features  (Columns): {df.shape[1]}
+
+
+Training Data (X-side)
+----------------------
+Observations (Rows): {x_train.shape[0]}
+Features  (Columns): {x_train.shape[1]}
+
+
+Training Data (y-side)
+----------------------
+Feature Name:        {y_train.name}
+Observations (Rows): {y_train.shape[0]}
+
+
+Testing Data (X-side)
+---------------------
+Observations (Rows): {x_test.shape[0]}
+Features  (Columns): {x_test.shape[1]}
+
+
+Testing Data (y-side)
+---------------------
+Feature Name:        {y_test.name}
+Observations (Rows): {y_test.shape[0]}""")
+## Candidate Modeling ##
+
+# naming the model
+model_name = 'LinearRegression'
+
+# model type:  sklearn.linear_model.LinearRegression()
+model = sklearn.linear_model.LinearRegression() 
+# naming the model
+model_name = 'KNN'
+
+
+# model type: sklearn.neighbors.KNeighborsRegressor
+model = sklearn.neighbors.KNeighborsRegressor()
+# naming the model
+model_name = 'lasso'
+
+
+# model type: sklearn.linear_model.Lasso
+model = sklearn.linear_model.Lasso()
+# naming the model
+model_name = 'DecisionTreeRegressor'
+
+
+# model type (ex: sklearn.tree.DecisionTreeRegressor
+model = sklearn.tree.DecisionTreeRegressor(max_depth=5, min_samples_split=10, min_samples_leaf=6)
+
+# FITTING to the training data
+model_fit = model.fit(x_train, y_train)
+
+
+# PREDICTING on new data
+model_pred = model.predict(x_test)
+
+
+# SCORING the results
+model_train_score = model.score(x_train, y_train).round(4)
+model_test_score  = model.score(x_test, y_test).round(4)
+model_gap         = abs(model_train_score - model_test_score).round(4)
+    
+
+# dynamically printing results
+model_summary =  f"""\
+Model Name:     {model_name}
+Train_Score:    {model_train_score}
+Test_Score:     {model_test_score}
+Train-Test Gap: {model_gap}
+"""
+
+print(model_summary)
+## Co Efficients for Linear Models ##
+# zipping each feature name to its coefficient
+model_coefficients = zip(x_train.columns,
+                         model.coef_.round(decimals = 4))
+
+
+# setting up a placeholder list to store model features
+coefficient_lst = [('intercept', model.intercept_.round(decimals = 4))]
+
+
+# printing out each feature-coefficient pair one by one
+for coefficient in model_coefficients:
+    coefficient_lst.append(coefficient)
+    
+
+# checking the results
+for pair in coefficient_lst:
+    print(pair)
+## Residual Analysis ##
+
+# organizing residuals
+model_residuals = {"True"            : y_test,
+                   "Predicted"       : model_pred
+                  }
+
+
+# converting residuals into df
+model_resid_df = pd.DataFrame(data = model_residuals)
+
+
+# checking results
+model_resid_df.head(n = 5)
+
+
+#!###########################!#
+#!# add more code as needed #!#
+# regression trees
+from sklearn.tree import plot_tree                     # tree plots
+from sklearn.model_selection import RandomizedSearchCV # hyperparameter tuning
+import warnings 
+
+# Adjusting the hyperparameter ranges
+criterion_range = ["squared_error", "friedman_mse", "absolute_error"]
+splitter_range  = ["best", "random"]
+depth_range     = np.arange(3, 20, 2)  # Expanded and refined range
+leaf_range      = np.arange(10, 50, 5)  # More focused range based on previous best
+
+# Updated hyperparameter grid
+param_grid = {
+    'criterion': criterion_range,
+    'splitter': splitter_range,
+    'max_depth': depth_range,
+    'min_samples_leaf': leaf_range
+}
+
+# Adjusting the n_iter for RandomizedSearchCV could potentially improve results
+# Consider increasing n_iter if computational resources permit
+
+              #'NAME OF HYPERPARAMETER' : HYPERPARAMETER_RANGE,
+              #'NAME OF HYPERPARAMETER' : HYPERPARAMETER_RANGE,
+              #'NAME OF HYPERPARAMETER' : HYPERPARAMETER_RANGE}
+
+
+# INSTANTIATING the model object without hyperparameters
+tuned_tree = DecisionTreeRegressor(random_state = 219)
+
+
+# RandomizedSearchCV object
+tuned_tree_cv = RandomizedSearchCV(estimator             = tuned_tree,
+                                   param_distributions   = param_grid, #hyper parameter range
+                                   cv                    = 5, #non of folds
+                                   n_iter                = 432, #how many models to build
+                                   random_state          = 702)
+
+
+# FITTING to the FULL DATASET (due to cross-validation)
+tuned_tree_cv.fit(x_data, y_data)
+
+
+# printing the optimal parameters and best score
+print("Tuned Parameters  :", tuned_tree_cv.best_params_)
+print("Tuned Training AUC:", tuned_tree_cv.best_score_.round(4))
+# naming the model
+model_name ='Tuned Tree'
+
+
+# INSTANTIATING a logistic regression model with tuned values
+model = DecisionTreeRegressor (splitter        = 'best',
+                            min_samples_leaf  =  21,
+                             max_depth        = 10, 
+                             criterion        = 'friedman_mse',
+                             random_state     = 702)
+
+
+# FITTING to the TRAINING data
+model.fit(x_train, y_train)
+
+
+# PREDICTING based on the testing set
+model.predict(x_test)
+
+
+# SCORING results
+model_train_score = model.score(x_train, y_train).round(4)
+model_test_score  = model.score(x_test, y_test).round(4)
+model_gap         = abs(model_train_score - model_test_score).round(4)
+
+
+# displaying results
+print('Training Score :', model_train_score)
+print('Testing Score  :', model_test_score)
+print('Train-Test Gap :', model_gap)
+# x-data
+x_data_kaggle = kaggle_data[x_features].copy()
+
+
+# y-data
+y_data_kaggle = kaggle_data[y_variable]
+
+
+# Fitting model from above to the Kaggle test data
+kaggle_predictions = model.predict(x_data_kaggle)
+## Kaggle Submission File ##
+
+# organizing predictions
+model_predictions = {"RENTALS" : kaggle_predictions}
+
+
+# converting predictions into df
+model_pred_df = pd.DataFrame(data  = model_predictions,
+                             index = df_test.index)
+#!######################!#
+#!# name the .csv file #!#
+#!######################!#
+
+# name your model
+model_pred_df.to_csv(path_or_buf = "./Submission.csv",
+                     index       = True,
+                     index_label = 'ID')
