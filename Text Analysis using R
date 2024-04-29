@@ -1,0 +1,481 @@
+# Load required packages
+library(dplyr)
+library(tidyr)
+library(tm)
+library(tidytext)
+library(wordcloud)
+library(ggplot2)
+library(cld3)
+library(syuzhet)
+library(topicmodels)
+library(wordcloud2)
+library(igraph)
+library(ggraph)
+library(mongolite)
+
+# Connect to MongoDB and load data
+connection_string <- 'mongodb+srv://nnkomo:Nigeldunny12.@cluster0.aydhgzk.mongodb.net'
+airbnb_collection <- mongo(collection="listingsAndReviews", db="sample_airbnb", url=connection_string)
+
+# Downloading all the Airbnb data from Mongo
+
+airbnb_all <- airbnb_collection$find()
+
+#1 subsetting your data based on a condition:
+mydf <- airbnb_collection$find('{"bedrooms":2, "price":{"$gt":50}}')
+#2 writing an analytical query on the data::
+mydf_analytical <- airbnb_collection$aggregate('[{"$group":{"_id":"$room_type", "avg_price": {"$avg":"price"}}}]')
+
+
+
+#Step1 Data Exploration and Preprocessing
+
+# Ensure mydf has a unique identifier for each document (text entry)
+mydf <- mydf %>%
+  mutate(doc_id = row_number())
+
+# Text tokenization and stop word removal
+tidy_data <- mydf %>%
+  unnest_tokens(word, description) %>%
+  anti_join(stop_words, by = "word") %>%
+  count(doc_id, word, sort = TRUE)
+
+# Creating a Document-Term Matrix
+dtm_tidy <- tidy_data %>%
+  cast_dtm(document = doc_id, term = word, value = n)
+
+# Checking for sparsity and No of Sparse entries
+dtm_tidy
+
+#Step 2: Analysing using N grams
+
+# Generating bigrams
+bigrams <- mydf %>%
+  unnest_tokens(bigram, description, token = "ngrams", n = 2)
+
+# Split bigrams and remove those containing stop words
+clean_bigrams <- bigrams %>%
+  separate(bigram, into = c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word & !word2 %in% stop_words$word) %>%
+  unite(bigram, word1, word2, sep = " ")
+
+
+# Count the occurrences of each bigram and keep the top 20 for visualization
+bigram_counts <- clean_bigrams %>%
+  count(bigram, sort = TRUE) %>%
+  top_n(20, n)  # Select the top 20 for visualization
+
+ggplot(bigram_counts, aes(x = reorder(bigram, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 20 Most Common Relevant Bigrams in Airbnb Listing Descriptions",
+       x = "Bigram",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Conducting the same analysis for quadrograms
+quadgrams <- mydf %>%
+  unnest_tokens(quadgram, description, token = "ngrams", n = 4)
+
+# Filter out quadgrams that contain stop words by splitting and checking each word
+clean_quadgrams <- quadgrams %>%
+  separate(quadgram, into = c("word1", "word2", "word3", "word4"), sep = " ", remove = FALSE) %>%
+  filter(
+    !word1 %in% stop_words$word,
+    !word2 %in% stop_words$word,
+    !word3 %in% stop_words$word,
+    !word4 %in% stop_words$word
+  ) %>%
+  select(quadgram)  # Keep only the quadgram column for further analysis
+
+# Count the occurrences of each quadgram and select the top ones
+quadgram_counts <- clean_quadgrams %>%
+  count(quadgram, sort = TRUE) %>%
+  top_n(20, n)  # Select the top 20 for visualization
+
+ggplot(quadgram_counts, aes(x = reorder(quadgram, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 20 Most Common Relevant Quadgrams in Airbnb Listing Descriptions",
+       x = "Quadgram",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+#Step 3: Text Mining FOR TF-IDF
+
+mydf <- mydf %>% mutate(doc_id = row_number())  # Add a document ID if not already present
+
+tidy_data <- mydf %>%
+  unnest_tokens(word, description) %>%
+  anti_join(stop_words, by = "word")
+
+# Create the TDM
+tdm <- tidy_data %>%
+  count(doc_id, word) %>%
+  cast_dtm(doc_id, word, n)
+
+#Calculating the TF _ IDF SCORE
+tf_idf <- tidy_data %>%
+  count(doc_id, word) %>%
+  bind_tf_idf(word, doc_id, n)
+
+# Arrange the words to see the highest TF-IDF scores
+tf_idf <- tf_idf %>%
+  arrange(desc(tf_idf))
+
+# Count word frequencies
+word_freqs <- tidy_data %>%
+  count(word, sort = TRUE) %>%
+  mutate(rank = row_number())
+
+# Plot the frequencies (on a log-log scale to observe Zipf's Law)
+ggplot(word_freqs, aes(x = rank, y = n)) +
+  geom_line() +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(x = "Rank (log scale)", y = "Frequency (log scale)",
+       title = "Word Frequency Distribution following Zipf's Law")
+
+
+#Step 4: Conducting a Corr Analysis on Text
+
+
+# First, create a TF-IDF matrix
+tf_idf_matrix <- tidy_data %>%
+  count(doc_id, word, sort = TRUE) %>%
+  bind_tf_idf(word, doc_id, n) %>%
+  cast_tdm(doc_id, word, tf_idf)
+
+# Convert to a matrix for correlation analysis
+tf_idf_mat <- as.matrix(tf_idf_matrix)
+
+# Calculate correlation - may be resource-intensive for large matrices
+word_correlation <- cor(tf_idf_mat)
+
+# Filter to find strong correlations
+threshold <- 0.6  # Set a threshold for strong correlations
+strong_correlations <- word_correlation[abs(word_correlation) > threshold & word_correlation != 1]
+strong_correlations
+
+#Finding the terms with the strongest corr
+# Assuming 'word_correlation' is your correlation matrix
+threshold <- 0.8  # Define the threshold for strong correlation
+strong_correlations <- which(abs(word_correlation) > threshold, arr.ind = TRUE)
+
+# Since the matrix is symmetric and we're not interested in 1's (perfect correlation with itself),
+# we can remove the lower triangle and the diagonal of the matrix
+strong_correlations <- strong_correlations[strong_correlations[, 1] > strong_correlations[, 2], ]
+
+# Extract the word pairs and their correlation values
+correlated_terms <- data.frame(
+  word1 = rownames(word_correlation)[strong_correlations[, 1]],
+  word2 = colnames(word_correlation)[strong_correlations[, 2]],
+  correlation = word_correlation[strong_correlations]
+)
+
+# View the most strongly correlated pairs
+correlated_terms <- correlated_terms[order(-correlated_terms$correlation), ]
+head(correlated_terms,100)
+
+#Step 5 : Creating topic models
+
+
+# Assuming 'mydf' has a column 'description' with the text and 'host_id' as the unique identifier
+dtm <- mydf %>%
+  unnest_tokens(word, description) %>%
+  anti_join(stop_words, by = "word") %>%
+  count(host$host_id, word) %>%
+  cast_dtm(host$host_id, word, n)
+
+
+# Run LDA
+k <- 5  # This is an example, adjust the number of topics based on your needs
+lda_model <- LDA(dtm, k = k, control = list(seed = 1234))
+
+# Examine the topics
+topics <- tidy(lda_model)
+topics
+
+
+# For each topic, find the top terms
+top_terms <- topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+# You can then visualize the results with a bar chart
+ggplot(top_terms, aes(x = reorder(term, beta), y = beta, fill = factor(topic))) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~topic, scales = "free") +
+  coord_flip() +
+  labs(x = "Term", y = "Beta", fill = "Topic") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# Step 6: Sentiment Analysis
+
+# Get sentiment lexicon
+sentiment <- get_sentiments("bing")
+
+# Calculate sentiment score
+mydf_sentiment <- mydf %>%
+  unnest_tokens(word, description) %>%
+  inner_join(sentiment, by = "word") %>%
+  count(document, sentiment, sort = TRUE)
+
+# Summarize sentiment by document
+document_sentiment <- mydf_sentiment %>%
+  group_by(name,property_type) %>%
+  summarise(sentiment_score = sum(case_when(
+    sentiment == "positive" ~ 1,
+    sentiment == "negative" ~ -1,
+    TRUE ~ 0
+  )))
+
+# View the sentiment score for each document
+document_sentiment
+
+# Creating Histogam  with the sentiment scores
+ggplot(document_sentiment, aes(x = sentiment_score)) +
+  geom_histogram(bins = 30, fill = "blue", color = "black") +
+  labs(title = "Distribution of Sentiment Scores",
+       x = "Sentiment Score",
+       y = "Count of Documents") +
+  theme_minimal()
+
+
+#Step 5: Classification- Machine Learning and Engineering
+
+# Tokenizing and removing stop words, numbers, and punctuations in one step
+tidy_data <- mydf %>%
+  unnest_tokens(word, description) %>%
+  filter(!word %in% stop_words$word) %>%
+  filter(!str_detect(word, "^\\d+$")) %>%
+  filter(!str_detect(word, "[[:punct:]]"))
+
+# Creating a Document-Term Matrix (DTM) from the tidy data
+dtm <- tidy_data %>%
+  count(doc_id, word) %>%
+  cast_dtm(doc_id, word, n)
+
+# Preparing the dataset for the Naive Bayes Model
+dtm_df <- as.data.frame(as.matrix(dtm))
+colnames(dtm_df) <- make.names(colnames(dtm_df))
+
+# Add 'property_type' back from the original dataframe
+dtm_df$property_type <- mydf$property_type[unique(tidy_data$doc_id)]
+
+# Ensure that 'property_type' is a factor
+dtm_df$property_type <- factor(dtm_df$property_type)
+
+# Splitting the dataset into training and testing sets
+set.seed(123)  # For reproducibility
+index <- createDataPartition(dtm_df$property_type, p = 0.8, list = FALSE)
+trainData <- dtm_df[index, ]
+testData <- dtm_df[-index, ]
+
+# Train the Naive Bayes model
+nb_model <- naiveBayes(property_type ~ ., data = trainData)
+
+# Make predictions
+predictions <- predict(nb_model, newdata = testData)
+
+# Evaluate the model's performance
+confusionMatrix(predictions, testData$property_type)
+
+#Step 7: Data Visualization
+
+#Data Visualization by Cloud
+
+words <- mydf %>%
+  unnest_tokens(word, description) %>%
+  anti_join(stop_words, by = "word") %>%
+  count(word, sort = TRUE)
+
+# Generate the word cloud
+set.seed(123)  # for reproducibility
+wordcloud(words$word, words$n, max.words = 100, random.order = FALSE, colors = brewer.pal(8, "Dark2"))
+
+
+#Data Visualization Network Graphs
+
+# Create a data frame of word pairs to plot in the network graph
+word_pairs <- mydf %>%
+  unnest_tokens(bigram, description, token = "ngrams", n = 2) %>%
+  separate(bigram, into = c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word & !word2 %in% stop_words$word) %>%
+  count(word1, word2, sort = TRUE)
+
+# Create a graph from the data frame
+graph <- graph_from_data_frame(word_pairs)
+
+# Create the network graph
+ggraph(graph, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+
+#Data Visualisation by Scatter Plots
+
+ggplot(tf_idf, aes(x = tf_idf, y = price)) +
+  geom_point() +
+  labs(x = "TF-IDF Score", y = "Price") +
+  theme_minimal()
+
+
+#Bar Charts
+
+# Visualization of the distribution of listings across different room types
+ggplot(mydf, aes(x = room_type)) +
+  geom_bar(fill = "steelblue") +
+  labs(x = "Room Type", y = "Count") +
+  theme_minimal()
+
+# Visualization of the distribution of listings across different neighborhoods
+ggplot(mydf, aes(x = neighborhood)) +
+  geom_bar(fill = "steelblue") +
+  labs(x = "Neighborhood", y = "Count") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))  # Rotate x-axis text for readability
+
+
+#Step 6: Grouping by Apartment and Popularity
+
+# Tokenizing and counting words
+mydf_token <- mydf %>%
+  unnest_tokens(word, description) %>%
+  count(property_type, word, sort = TRUE) %>%
+  ungroup()
+
+# Removing common stopwords
+mydf_token <- mydf_token %>%
+  anti_join(stop_words, by = "word")
+
+# Grouping and normalizing word frequencies
+total_words <- mydf_token %>%
+  group_by(property_type) %>%
+  summarize(total = sum(n))
+
+# Joining frequency data with the total counts
+airbnb_words <- left_join(mydf_token, total_words) %>%
+  filter(property_type %in% c("House", "Apartment", "Condominium"))  # You can choose property types relevant to your analysis
+
+# Plotting the term frequencies
+ggplot(airbnb_words, aes(n/total, fill = property_type)) +
+  geom_histogram(show.legend = FALSE) +
+  xlim(NA, 0.001) +
+  facet_wrap(~property_type, ncol = 2, scales = "free_y")
+
+# Observing Zipf's Law
+freq_by_rank <- airbnb_words %>%
+  group_by(property_type) %>%
+  mutate(rank = row_number(),
+         `term frequency` = n/total)
+
+# Plotting Zipf's Law
+freq_by_rank %>%
+  ggplot(aes(rank, `term frequency`, color = property_type)) +
+  geom_abline(intercept = -0.62, slope = -1.1, color = 'gray50', linetype = 2) +
+  geom_line(size = 1.1, alpha = 0.8, show.legend = FALSE) +
+  scale_x_log10() +
+  scale_y_log10()
+
+# Calculating TF-IDF
+tf_idf <- mydf %>%
+  unnest_tokens(word, description) %>%
+  count(property_type, word, sort = TRUE) %>%
+  bind_tf_idf(word, property_type, n)
+
+# Plotting the top TF-IDF scores for each property type
+tf_idf %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  group_by(property_type) %>%
+  top_n(10, tf_idf) %>%
+  ungroup() %>%
+  ggplot(aes(word, tf_idf, fill = property_type)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~property_type, ncol = 2, scales = "free") +
+  coord_flip()
+
+
+##########################################################################################################
+#   Creating Visuals with Shiny 
+##########################################################################################################
+
+
+# Define UI with additional tabs
+ui <- fluidPage(
+  titlePanel("Airbnb Text Mining Insights"),
+  sidebarLayout(
+    sidebarPanel(
+      helpText("Explore Airbnb Listings Data")
+    ),
+    mainPanel(
+      tabsetPanel(
+        tabPanel("Room Type Distribution", plotOutput("roomTypePlot")),
+        tabPanel("Neighborhood Distribution", plotOutput("neighborhoodPlot")),
+        tabPanel("TF-IDF Scores", plotOutput("tfidfPlot")),
+        tabPanel("Top Bigrams", plotOutput("bigramPlot")),
+        tabPanel("Top Quadgrams", plotOutput("quadgramPlot")),
+        tabPanel("Sentiment Score Distribution", plotOutput("sentimentPlot")),
+        tabPanel("Zipf's Law", plotOutput("zipfLawPlot")),
+        tabPanel("Word Cloud", uiOutput("wordCloud"))
+      )
+    )
+  )
+)
+
+# Define server logic with additional plots
+server <- function(input, output) {
+  # Existing plots...
+  
+  output$bigramPlot <- renderPlot({
+    # Assuming bigram_counts is prepared
+    ggplot(bigram_counts, aes(x = reorder(bigram, n), y = n)) +
+      geom_col(fill = "steelblue") +
+      coord_flip() +
+      labs(title = "Top 20 Bigrams", x = "", y = "Frequency")
+  })
+  
+  output$quadgramPlot <- renderPlot({
+    # Assuming quadgram_counts is prepared
+    ggplot(quadgram_counts, aes(x = reorder(quadgram, n), y = n)) +
+      geom_col(fill = "steelblue") +
+      coord_flip() +
+      labs(title = "Top 20 Quadgrams", x = "", y = "Frequency")
+  })
+  
+  output$sentimentPlot <- renderPlot({
+    # Assuming document_sentiment is prepared
+    ggplot(document_sentiment, aes(x = sentiment_score)) +
+      geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+      labs(title = "Sentiment Score Distribution", x = "Sentiment Score", y = "Count")
+  })
+  
+  output$zipfLawPlot <- renderPlot({
+    # Assuming word_freqs is prepared
+    ggplot(word_freqs, aes(x = rank, y = n)) +
+      geom_line() +
+      scale_x_log10() +
+      scale_y_log10() +
+      labs(x = "Rank (log scale)", y = "Frequency (log scale)", title = "Zipf's Law Visualization")
+  })
+  
+  output$wordCloud <- renderUI({
+    # Assuming words dataframe is prepared for wordcloud
+    wordcloud <- wordcloud2(words, size = 0.7)
+    wordcloud2Output("wordcloud", width = "100%", height = "600px")
+  })
+}
+
+# Run the application
+shinyApp(ui, ui, server = server)
+
+
