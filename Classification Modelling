@@ -1,0 +1,724 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix
+
+########################################
+# loading data and setting display options
+########################################
+# loading data
+df = pd.read_excel(io = 'C:/Users/LENOVO/Downloads/facebook_live_data.xlsx')
+
+
+# setting print options
+pd.set_option('display.max_rows', 500)
+pd.set_option('display.max_columns', 500)
+pd.set_option('display.width', 1000)
+pd.set_option('display.max_colwidth', 100)
+
+df.head(n=5)
+# Checking the stats for diffrent columns and info 
+df.info()
+
+#Columns and how they will be treated
+
+#status_id: An identifier for the post.                       To drop for analysis
+#status_type: The type of post, such as photo or video.       To use for one hot encoding for dummy variables
+#time_published: When the post was published.                 One hot encoding & engineer new features 
+#num_comments: The number of comments on the post.            Keeping
+#num_shares: The number of shares of the post.                Keeping
+#num_likes: The number of likes on the post.                  Keeping
+#num_loves: The number of loves on the post.                  Keeping
+#num_wows: The number of wows on the post.                    Keeping
+#num_hahas: The number of hahas on the post.                  Keeping
+#num_sads: The number of sads on the post.                    Keeping
+#num_angrys: The number of angry reactions to the post.       Keeping
+# Identifying missing values
+df.isnull().sum()
+df.describe(include='number').round(decimals = 2)
+#Checking for str values under status type
+df['status_type'].unique()
+from sklearn.preprocessing import StandardScaler
+
+# One-hot encode 'status_type' column with integer outputs
+df_with_dummies = pd.get_dummies(df, columns=['status_type'], drop_first=False)
+
+# Now, explicitly convert only the one-hot encoded columns to int
+for col in df_with_dummies.columns:
+    if 'status_type_' in col:  # This assumes your one-hot columns are prefixed with 'status_type_'
+        df_with_dummies[col] = df_with_dummies[col].astype(int)
+
+# Drop columns that won't be used in PCA
+df_ready_for_pca = df_with_dummies.drop(columns=['status_id', 'time_published'])
+
+# Define the scaler function
+def scaler(df):
+    """
+    Standardizes a dataset (mean = 0, variance = 1). Returns a new DataFrame.
+    Requires sklearn.preprocessing.StandardScaler()
+    """
+    scaler = StandardScaler(copy=True)
+    scaler.fit(df)
+    x_scaled = scaler.transform(df)
+    new_df = pd.DataFrame(x_scaled, columns=df.columns)
+    return new_df
+
+# Standardize the DataFrame including one-hot encoded columns
+df_standardized = scaler(df_ready_for_pca)
+
+
+# Show the first few rows to confirm everything is as expected
+df_standardized.head()
+#Feature Engineering 
+# Convert date column to datetime
+df['time_published'] = pd.to_datetime(df['time_published'])
+
+# Extract date components
+df['year'] = df['time_published'].dt.year
+df['month'] =df['time_published'].dt.month
+df['day'] = df['time_published'].dt.day
+df['hour'] = df['time_published'].dt.hour
+df['weekday'] = df['time_published'].dt.weekday  # Monday will be 0 and Sunday will be 6
+
+df
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+
+# Performing PCA
+pca = PCA()
+pca.fit(df_standardized)
+
+# Scree Plot function from your template
+def scree_plot(pca_object, export=False):
+    """
+    Visualizes a scree plot from a pca object.
+    
+    PARAMETERS
+    ----------
+    pca_object | A fitted pca object
+    export     | Set to True if you would like to save the scree plot to the
+               | current working directory (default: False)
+    """
+    # Building a scree plot
+    fig, ax = plt.subplots(figsize=(10, 8))
+    features = range(pca_object.n_components_)
+
+    # Developing a scree plot
+    plt.plot(features,
+             pca_object.explained_variance_ratio_,
+             linewidth=2,
+             marker='o',
+             markersize=10,
+             markeredgecolor='black',
+             markerfacecolor='grey')
+
+    # Setting more plot options
+    plt.title('Scree Plot')
+    plt.xlabel('PCA feature')
+    plt.ylabel('Explained Variance')
+    plt.xticks(features)
+
+    if export:
+        # Exporting the plot
+        plt.savefig('./analysis_images/pca_scree_plot.png')
+        
+    # Displaying the plot
+    plt.show()
+
+# Displaying the Scree Plot
+scree_plot(pca)
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Let's assume 'df_standardized' is already defined and standardized
+# For this example, we'll create a random standardized dataframe
+np.random.seed(0)
+df_standardized = np.random.rand(100, 5)
+
+# Performing PCA
+pca = PCA()
+pca.fit(df_standardized)
+
+# Scree Plot function
+def scree_plot(pca_object, cutoff=None, export=False):
+    """
+    Visualizes a scree plot from a pca object and can draw a cutoff line.
+    
+    PARAMETERS
+    ----------
+    pca_object | A fitted pca object
+    cutoff     | Component number to draw a vertical cutoff line (optional)
+    export     | Set to True if you would like to save the scree plot to the
+               | current working directory (default: False)
+    """
+    # Building a scree plot
+    fig, ax = plt.subplots(figsize=(10, 8))
+    features = range(pca_object.n_components_)
+
+    # Developing a scree plot
+    plt.plot(features,
+             pca_object.explained_variance_ratio_,
+             linewidth=2,
+             marker='o',
+             markersize=10,
+             markeredgecolor='black',
+             markerfacecolor='grey')
+
+    # Drawing a cutoff line at the selected component
+    if cutoff:
+        plt.axvline(x=cutoff - 1, color='red', linestyle='--')
+
+    # Setting more plot options
+    plt.title('Scree Plot')
+    plt.xlabel('PCA feature')
+    plt.ylabel('Explained Variance')
+    plt.xticks(features)
+
+    if export:
+        # Exporting the plot
+        plt.savefig('./analysis_images/pca_scree_plot.png')
+        
+    # Displaying the plot
+    plt.show()
+
+# Displaying the Scree Plot with a cutoff line at the third component
+scree_plot(pca, cutoff=3)
+# Let's create a scree plot with vertical lines at the first three components
+
+def scree_plot_with_cutoff(pca_object, cutoff):
+    """
+    Visualizes a scree plot with a vertical line for the cutoff from a pca object.
+    
+    PARAMETERS
+    ----------
+    pca_object | A fitted pca object
+    cutoff     | The number of principal components to retain
+    """
+    # Number of components
+    num_components = pca_object.n_components_
+    ind = np.arange(num_components)
+    vals = pca_object.explained_variance_ratio_
+
+    # Create scree plot
+    plt.figure(figsize=(10, 6))
+    ax = plt.subplot(111)
+    cumvals = np.cumsum(vals)
+    ax.bar(ind, vals)
+    ax.plot(ind, cumvals)
+
+    # Add lines for the cutoff
+    for i in range(cutoff):
+        ax.axvline(x=i, linestyle='--', color='r')
+
+    # Add labels and title
+    ax.set_xlabel('Principal Component')
+    ax.set_ylabel('Variance Explained (%)')
+    plt.title('Scree plot')
+
+    # Show the plot
+    plt.show()
+
+# Now call the function with your PCA object and the cutoff value
+scree_plot_with_cutoff(pca, 3)
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+
+
+# Convert it to a pandas DataFrame first, and optionally name the columns if you know them
+df_standardized_df = pd.DataFrame(df_standardized, columns=[f'Feature{i}' for i in range(df_standardized.shape[1])])
+
+# setting figure size
+fig, ax = plt.subplots(figsize=(12, 8))
+
+# Number of features
+num_features = df_standardized_df.shape[1]
+
+# Initialize a counter
+count = 0
+
+# looping to create visualizations
+for col in df_standardized_df.columns:
+    # Increment count
+    count += 1
+
+    # Break the loop if the number of features is less than expected
+    if count > num_features or count > 9:
+        break
+    
+    # Preparing histograms
+    plt.subplot(3, 3, count)
+    sns.histplot(x=df_standardized_df[col], kde=True)
+
+# Adjusting layout and displaying the plot
+plt.tight_layout()
+plt.show()
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+
+# Assuming 'df' is your original DataFrame
+# Selecting only numeric columns for standardization (if not already done)
+numeric_cols = df.select_dtypes(include=[np.number]).columns  # This captures the column names for later use
+
+# Standardizing the data
+scaler = StandardScaler()
+df_standardized = scaler.fit_transform(df[numeric_cols])
+
+# Converting back to DataFrame to keep column names
+df_standardized = pd.DataFrame(df_standardized, columns=numeric_cols)
+
+# Now df_standardized is a DataFrame and you can access its columns attribute
+print(df_standardized.columns)
+# Check the distribution of post types
+print("\nDistribution of post types:")
+print(df['status_type'].value_counts(normalize=True))
+import pandas as pd
+from sklearn.decomposition import PCA
+
+# Check the actual shape of your data and provide the correct number of column names
+actual_columns = ['num_comments', 'num_shares', 'num_likes', 'num_loves', 'num_wows','num_hahas', 'num_sads', 'num_angrys']  
+
+# Convert the standardized numpy array to a pandas DataFrame with the correct columns
+df_standardized = pd.DataFrame(df_standardized, columns=actual_columns)
+
+# Assuming you want to retain the numeric columns for PCA
+n_components = 3
+pca_selected = PCA(n_components=n_components)
+pca_selected.fit(df_standardized)
+
+# Transforming the standardized data with the selected PCA
+df_pca = pd.DataFrame(pca_selected.transform(df_standardized), columns=[f'PC{i+1}' for i in range(n_components)])
+
+# Factor loadings (PCA components) are the coefficients of the linear combination
+factor_loadings_df = pd.DataFrame(pca_selected.components_.T, 
+                                  columns=[f'PC{i+1}' for i in range(n_components)], 
+                                  index=actual_columns).round(2)
+
+print(factor_loadings_df)
+# Correlation between columns
+print("\nactual_columns:")
+print(df[actual_columns].corr())
+# Visualize columns over time
+plt.figure(figsize=(12, 8))
+for i, metric in enumerate(actual_columns):
+    plt.subplot(2, 4, i+1)
+    df.set_index('time_published')[metric].resample('Y').mean().plot()
+    # Add a vertical red line at year 2020
+    plt.axvline(pd.to_datetime('2020-01-01'), color='red', linestyle='--')
+    plt.title(f'{metric} over time')
+    plt.ylabel(metric)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+plt.show()
+# Visualizing  by post type
+plt.figure(figsize=(12, 8))
+for i, metric in enumerate(actual_columns):
+    plt.subplot(2, 4, i+1)
+    sns.barplot(x='status_type', y=metric, data=df)
+    plt.title(f'{metric} by post type')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+plt.show()
+import pandas as pd
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+# Assuming 'df' is your DataFrame and it has numeric data for PCA
+# Let's first isolate the numeric columns (excluding non-numeric for PCA purposes)
+df_numeric = df.select_dtypes(include=[np.number])
+
+# Standardizing the data
+scaler = StandardScaler()
+df_scaled = scaler.fit_transform(df_numeric)
+
+# Convert scaled data back to DataFrame (optional, for PCA we could use the array directly)
+df_scaled = pd.DataFrame(df_scaled, columns=df_numeric.columns)
+
+# Instantiate PCA with 3 components
+pca_3 = PCA(n_components=3, random_state=702)
+
+# Fit and transform the scaled data
+df_pca_3 = pca_3.fit_transform(df_scaled)
+
+# Creating factor loadings DataFrame
+factor_loadings_3 = pd.DataFrame(np.transpose(pca_3.components_), 
+                                 index=df_scaled.columns, 
+                                 columns=['Engaging segment', 'Visual Segment', 'Reading segment'])
+
+# Displaying the factor loadings
+print(factor_loadings_3)
+# Number of components to retain based on scree plot analysis
+n_components = 3
+
+# Applying PCA with the selected number of components
+pca_selected = PCA(n_components=n_components)
+pca_selected.fit(df_standardized)
+
+# Transforming the standardized data with the selected PCA
+df_pca = pca_selected.transform(df_standardized)
+
+# Factor loadings (PCA components) are the coefficients of the linear combination
+factor_loadings_df = pd.DataFrame(pca_selected.components_.T, 
+                                  index=df_standardized.columns,
+                                  columns=[f'PC{i+1}' for i in range(n_components)])
+
+# Rounding the factor loadings to two decimal places for better interpretation
+factor_loadings_df = factor_loadings_df.round(2)
+
+factor_loadings_df
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+
+# Assuming df_pca is the PCA-transformed data
+wcss = []
+for i in range(1, 11):
+    kmeans = KMeans(n_clusters=i, init='k-means++', max_iter=300, n_init=10, random_state=0)
+    kmeans.fit(df_pca)
+    wcss.append(kmeans.inertia_)
+
+# Plotting the results onto a line graph to observe 'The elbow'
+plt.figure(figsize=(10, 8))
+plt.plot(range(1, 11), wcss, marker='o', linestyle='--')
+plt.title('Elbow Method')
+plt.xlabel('Number of clusters')
+plt.ylabel('WCSS') # within cluster sum of squares
+plt.show()
+#Renaming PCA Components
+import pandas as pd
+
+# Assuming df_pca is your PCA-transformed dataset which is a NumPy array
+# Convert it to a pandas DataFrame
+df_pca_clusters = pd.DataFrame(df_pca, columns=['Engaging segment', 'Visual Segment', 'Reading segment'])
+
+# Assign the cluster labels to each data point
+df_pca_clusters['Cluster'] = kmeans.labels_
+
+# Display the first few rows to confirm the changes
+print(df_pca_clusters.head())
+from sklearn.cluster import KMeans
+
+# Fit K-means clustering
+kmeans = KMeans(n_clusters=4, random_state=42)
+kmeans.fit(df_pca)
+
+# Assuming df_pca is a DataFrame that already has the PCA-transformed data
+# Create a DataFrame with the PCA components and the assigned cluster labels
+df_pca_clusters = pd.DataFrame(df_pca, columns=[f'PC{i+1}' for i in range(df_pca.shape[1])])
+df_pca_clusters['Cluster'] = kmeans.labels_
+
+# Prepare new column names for centroids DataFrame, with three renamed and the rest as 'PCX'
+new_column_names = ['Engaging segment', 'Visual Segment', 'Reading segment'] + [f'PC{i}' for i in range(4, df_pca.shape[1] + 1)]
+
+# Analyze the cluster centroids and rename columns accordingly
+centroids = kmeans.cluster_centers_
+centroids_df = pd.DataFrame(centroids, columns=new_column_names)
+
+# Now you can interpret the cluster centroids to understand what each cluster represents
+print(centroids_df)
+df['Cluster'] = df_pca_clusters['Cluster']
+# Calculate the mean for each original feature within each cluster
+# Exclude non-numeric columns before grouping and calculating the mean
+numeric_cols = df.select_dtypes(include=['number']).columns
+cluster_profiles = df[numeric_cols].groupby('Cluster').mean()
+print(cluster_profiles)
+# Analyze the status_type distribution within each cluster to see if a particular type of content (e.g., photo, video, text) is more prevalent in the higher engagement clusters.
+# If 'df' is your original dataframe with 'status_type' and 'df_pca_clusters' is your dataframe with cluster labels
+df['Cluster'] = df_pca_clusters['Cluster']
+
+# Now group by 'Cluster' and 'status_type' and count the occurrences
+status_type_distribution = df.groupby(['Cluster', 'status_type']).size().unstack(fill_value=0)
+
+# Optionally, calculate the percentage of each status type within each cluster
+status_type_distribution_percentage = status_type_distribution.divide(status_type_distribution.sum(axis=1), axis=0)
+
+print(status_type_distribution)
+print(status_type_distribution_percentage)
+# Rename the PCA components to 'Engaging segment', 'Visual Segment', and 'Reading segment'
+df_pca_clusters.rename(columns={'PC1': 'Engaging segment',
+                                'PC2': 'Visual Segment',
+                                'PC3': 'Reading segment'}, inplace=True)
+
+# Verify the column names
+print(df_pca_clusters.columns)
+from scipy.cluster.hierarchy import linkage, dendrogram
+import matplotlib.pyplot as plt
+
+# Assuming 'pca_rescaled' is a DataFrame or NumPy array containing your scaled PCA components
+
+# Perform the hierarchical clustering using the Ward method
+standard_mergings_ward = linkage(y = df_pca_clusters,
+                                 method = 'ward',
+                                 optimal_ordering = True)
+
+# Set the size of the plot
+fig, ax = plt.subplots(figsize=(12, 12))
+
+# Create the dendrogram
+dendrogram(Z = standard_mergings_ward,
+           leaf_rotation = 90,
+           leaf_font_size = 6)
+
+# Show the plot
+plt.show()
+# Visualizing in 2D
+plt.figure(figsize=(10, 8))
+sc = plt.scatter(df_pca_clusters['Engaging segment'], df_pca_clusters['Visual Segment'], c=df_pca_clusters['Cluster'])
+plt.xlabel('Engaging Segment')
+plt.ylabel('Visual Segment')
+plt.title('Cluster Visualization with 2 Principal Components')
+plt.colorbar(sc)  # Pass the scatter plot as argument to colorbar
+plt.show()
+
+
+# Visualizing in 3D
+fig = plt.figure(figsize=(10, 8))
+ax = fig.add_subplot(111, projection='3d')
+sc = ax.scatter(df_pca_clusters['Engaging segment'], df_pca_clusters['Visual Segment'], df_pca_clusters['Reading segment'], c=df_pca_clusters['Cluster'])
+ax.set_xlabel('Engaging Segment')
+ax.set_ylabel('Visual Segment')
+ax.set_zlabel('Reading Segment')
+ax.set_title('Cluster Visualization with 3 Principal Components')
+fig.colorbar(sc, ax=ax)  # Pass the scatter plot as argument to colorbar
+plt.show()
+import matplotlib.pyplot as plt
+
+# Assuming 'df_pca_clusters' is your DataFrame with the PCA components and 'Cluster' labels
+# And that 'PC1' and 'PC2' have been renamed to 'Engaging segment' and 'Visual Segment'
+plt.figure(figsize=(10, 8))
+plt.scatter(df_pca_clusters['Engaging segment'], df_pca_clusters['Visual Segment'], c=df_pca_clusters['Cluster'], cmap='viridis', alpha=0.5)
+
+# This is optional to add cluster centers to the plot
+# Ensure the centroids are calculated from the correctly named PCA columns
+centroids = kmeans.cluster_centers_  # Assuming 'kmeans' is your KMeans object
+plt.scatter(centroids[:, 0], centroids[:, 1], c='red', marker='X', s=200, label='Centroids')
+
+plt.title('2D PCA Cluster Visualization')
+plt.xlabel('Engaging Segment')  # Updated axis label
+plt.ylabel('Visual Segment')    # Updated axis label
+plt.colorbar()  # Show cluster color scale
+plt.legend()    # Show the centroids legend
+plt.show()
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.impute import SimpleImputer
+
+
+# Prepare the target variable 'y' where 1 is photo and 0 is not photo
+y = df['status_type'].apply(lambda x: 1 if x == 'photo' else 0)
+
+# Prepare the feature set 'X', which should include only the numeric features
+# Exclude 'status_id' if it's not informative for the prediction
+X = df.select_dtypes(include=['number']).drop(['status_id'], axis=1, errors='ignore')
+
+# Imputing missing values in X
+imputer = SimpleImputer(strategy='mean')
+X_imputed = imputer.fit_transform(X)
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_imputed, y, test_size=0.2, random_state=42)
+
+# Initialize the Logistic Regression model
+logreg = LogisticRegression()
+
+# Fit the model with the training data
+logreg.fit(X_train, y_train)
+
+# Predict on the testing set
+y_pred = logreg.predict(X_test)
+
+# Model evaluation
+print(classification_report(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred))
+
+# To see the model coefficients
+print(logreg.coef_)
+# Model 1 - Logistic Regression
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix
+
+# Assuming 'df' is your original dataframe
+
+# Prepare the target variable 'y' where 1 is photo and 0 is not photo
+y = df['status_type'].apply(lambda x: 1 if x == 'photo' else 0)
+
+# Prepare the feature set 'X', which should include only the numeric features
+# Exclude 'status_id' if it's not informative for the prediction
+X = df.select_dtypes(include=['number']).drop(['status_id'], axis=1, errors='ignore')
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Initialize the Logistic Regression model
+logreg = LogisticRegression()
+
+# Fit the model with the training data
+logreg.fit(X_train, y_train)
+
+# Predict on the testing set
+y_pred = logreg.predict(X_test)
+
+# Model evaluation
+print(classification_report(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred))
+
+# To see the model coefficients
+print(logreg.coef_)
+# Making use of standardized dataset for results
+
+# Scale the features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Split the scaled dataset into training and testing sets
+X_train_scaled, X_test_scaled, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+# Initialize the Logistic Regression model
+logreg = LogisticRegression()
+
+# Fit the model with the scaled training data
+logreg.fit(X_train_scaled, y_train)
+
+# Predict on the scaled testing set
+y_pred_scaled = logreg.predict(X_test_scaled)
+
+# Model evaluation
+print(classification_report(y_test, y_pred_scaled))
+print(confusion_matrix(y_test, y_pred_scaled))
+
+# To see the model coefficients
+print(logreg.coef_)
+#addressing the convergence warning
+
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Fit the model again with increased max_iter and potentially a different solver
+logreg = LogisticRegression(max_iter=1000, solver='newton-cg')
+logreg.fit(X_train_scaled, y_train)
+
+# Now evaluate the model again
+y_pred = logreg.predict(X_test_scaled)
+print(classification_report(y_test, y_pred))
+#model 2: Retained principal components
+
+# Initialize the StandardScaler
+scaler = StandardScaler()
+
+# Assuming 'X_pca' is your PCA-transformed data
+# Fit the scaler to the PCA data and transform it
+X_pca_scaled = scaler.fit_transform(X_pca)
+
+# Split the scaled PCA data into training and testing sets
+X_train_pca_scaled, X_test_pca_scaled, y_train, y_test = train_test_split(X_pca_scaled, y, test_size=0.2, random_state=42)
+
+# Initialize the Logistic Regression model
+logreg_pca_scaled = LogisticRegression(max_iter=1000)
+
+# Fit the model with the scaled PCA-transformed training data
+logreg_pca_scaled.fit(X_train_pca_scaled, y_train)
+
+# Predict on the scaled PCA-transformed testing set
+y_pred_pca_scaled = logreg_pca_scaled.predict(X_test_pca_scaled)
+
+# Model evaluation
+print(classification_report(y_test, y_pred_pca_scaled))
+print(confusion_matrix(y_test, y_pred_pca_scaled))
+# List your feature names to inspect them
+print(X_pca.columns)
+#Cross validating to ensure the model is not over fitting 
+
+from sklearn.model_selection import cross_val_score
+
+# Apply 10-fold cross-validation
+# 'logreg_pca' is your logistic regression model fitted with PCA components
+scores = cross_val_score(logreg_pca, X_pca, y, cv=10, scoring='accuracy')
+
+# Print out the accuracy for each fold
+print(scores)
+
+# Print the mean accuracy and the 95% confidence interval of the score estimate
+print("Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+#Model 3: Cluster assignments as the features for logistic regression
+
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
+
+# Assuming 'df' is your original dataframe with 'status_type' and 'Cluster' labels
+# Prepare the target variable 'y' where 1 is photo and 0 is not photo
+y = df['status_type'].apply(lambda x: 1 if x == 'photo' else 0)
+
+# One-hot encode the 'Cluster' labels
+onehot_encoder = OneHotEncoder(sparse=False)
+X_clusters = onehot_encoder.fit_transform(df[['Cluster']])
+
+# Split the dataset into training and testing sets
+X_train_cl, X_test_cl, y_train, y_test = train_test_split(X_clusters, y, test_size=0.2, random_state=42)
+
+# Initialize the Logistic Regression model
+logreg_cl = LogisticRegression(max_iter=1000)
+
+# Fit the model with the training data
+logreg_cl.fit(X_train_cl, y_train)
+
+# Predict on the testing set
+y_pred_cl = logreg_cl.predict(X_test_cl)
+
+# Model evaluation
+print(classification_report(y_test, y_pred_cl))
+print(confusion_matrix(y_test, y_pred_cl))
+
+# To see the model coefficients
+print(logreg_cl.coef_)
+#making use of AUC to validate and crosscheck my model
+
+from sklearn.metrics import roc_auc_score, roc_curve
+import matplotlib.pyplot as plt
+
+# Predict probabilities for the positive class (class 1, which corresponds to 'photo')
+y_pred_prob = logreg_cl.predict_proba(X_test_cl)[:, 1]
+
+# Compute ROC-AUC score
+auc_score = roc_auc_score(y_test, y_pred_prob)
+print(f"ROC-AUC Score: {auc_score}")
+
+# Compute ROC curve
+fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
+
+# Plot ROC curve
+plt.figure()
+plt.plot(fpr, tpr, label=f'Logistic Regression (AUC = {auc_score:.2f})')
+plt.plot([0, 1], [0, 1], 'k--')  # Dashed diagonal
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate (Recall)')
+plt.title('ROC Curve')
+plt.legend(loc='lower right')
+plt.show()
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+
+# Assuming 'y_test' and 'y_pred_pca_scaled' are already defined from your model predictions
+conf_matrix = confusion_matrix(y_test, y_pred_pca_scaled)
+
+# Creating a heatmap from the confusion matrix
+plt.figure(figsize=(8, 6))
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', cbar=False)  # cbar=False if you don't want a color bar
+plt.title('Confusion Matrix Heatmap')
+plt.xlabel('Predicted Labels')
+plt.ylabel('True Labels')
+plt.xticks(ticks=[0.5, 1.5], labels=['Not Photo', 'Photo'])  # Update labels accordingly
+plt.yticks(ticks=[0.5, 1.5], labels=['Not Photo', 'Photo'], rotation=0)  # Update labels accordingly
+plt.show()
