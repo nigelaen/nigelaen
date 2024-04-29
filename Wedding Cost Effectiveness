@@ -1,0 +1,133 @@
+# importing python libraries
+import pandas as pd 
+import seaborn as sns  
+import matplotlib.pyplot as plt  
+    
+#locate the file 
+file = "./__datasets/vendors2.xlsx"
+
+#reading the file into python
+vendors_df = pd.read_excel (io        = file)
+# converting data types with a dictionary
+data_types = {"vendor_id"  : str,
+              "vendor_depart": str}
+
+
+# instantiating the dataset as an object
+vendors_df = pd.read_excel(io         = file,       
+                         sheet_name   = 'products', 
+                         header     =    0,          
+                         dtype      = data_types,   # applying new data types
+                         usecols     = range(1, 6) ) # range object
+
+
+# checking results
+vendors_df.describe().round(decimals = 2)
+
+#Business Analytics#Frequency tables
+
+vendor_df.describe(include = 'object').round(decimals = 2)
+# Frequency tables for categorical variables
+file = "./__datasets/vendors2.xlsx"
+
+vendors_df = pd.read_excel (io        = file)
+
+frequency_table = vendors_df['vendor_depart'].value_counts()
+print(frequency_table)
+
+# applying value_counts to vendor_departments
+vendors_df['vendor_depart'].value_counts(normalize = True ,
+                sort      = False,
+                ascending = False).round(decimals = 3)\
+                                  .sort_index(axis = 0, # sorting index
+                                              ascending = True)
+# linear (Pearson) correlation
+vendors_df.corr(method =  'pearson',
+              min_periods = 30,
+              numeric_only = True).round(decimals = 2)
+# Data visualizations
+ 
+file = "./__datasets/vendors2.xlsx"
+
+#reading the file into python
+vendors_df = pd.read_excel (io        = file)
+
+
+# Scatterplot between vendor_rating and price_ce
+sns.scatterplot(x='vendor_sustainable', y='price_unit', data=vendors_df)
+plt.title('Scatterplot of Vendor Sustainable vs Price Unit')
+plt.xlabel('Vendor_sustainable')
+plt.ylabel('Price_unit')
+plt.show()
+
+#Boxplot of vendor_sustainable
+sns.boxplot(x='vendor_sustainable', y='price_ce', data=vendors_df)
+plt.title('Boxplot of Vendor Sustainable vs Price CE')
+plt.xlabel('Vendor Sustainable')
+plt.ylabel('Price CE')
+plt.show()
+
+vendors_df_corr = vendors_df.corr(method =  'pearson',
+                  min_periods = 30,
+                  numeric_only = True).round(decimals = 2)
+
+
+# specifying plot size (making it bigger)
+fig, ax = plt.subplots( figsize = (12 , 12) )
+
+
+# developing a coolwarm heatmap
+sns.heatmap(data       = vendors_df_corr, # the correlation matrix
+            cmap       = "coolwarm"       , # changing to MEDIUM colors
+            square     = True         , # tightening the layout
+            annot      = True         , # should there be numbers in the heatmap
+            linecolor  = 'black'      , # lines between boxes
+            linewidths = 0.5          ) # how thick should the lines be?
+
+
+# title and displaying the plot
+plt.title(label = """
+Linear Correlation Heatmap for Vendor Features
+""")
+
+
+# visualizing the data
+plt.show(block = True)
+# instantiating a scatter plot for carat and price
+sns.lmplot(x          = 'vendor_sustainable' , # x-axis feature
+           y          = 'price_ce' , # y-axis feature
+           hue        = None    , # categorical data for subsets
+           scatter    = True    , # renders a scatter plot
+           fit_reg    = False   , # renders a regression line
+           aspect     = 2       , # aspect ratio for plot
+           data       = vendors_df) # DataFrame where features exist
+
+
+# formatting and displaying the plot
+plt.title       (label  = 'vendor_sustainable')
+plt.xlabel      (xlabel = 'price_ce'          )
+plt.ylabel      (ylabel = 'Price (USD)'           )
+plt.xlim        (left   = 0, right = 2.8          )
+plt.tight_layout(pad    = 1.0                     )
+plt.show        (block  = True                    )
+
+ig, ax = plt.subplots( figsize = (12 , 12) )
+
+
+# developing a freezing cold heatmap
+sns.heatmap(data       = vendors_df_corr, # the correlation matrix
+            cmap       = 'Blues'        , # changing to COOL colors
+            square     = True         , # tightening the layout
+            annot      = True         , # should there be numbers in the heatmap
+            linecolor  = 'black'      , # lines between boxes
+            linewidths = 0.5          ) # how thick should the lines be?
+
+
+# title and displaying the plot
+plt.title(label = """
+Linear Correlation Heatmap for Diamond Features
+""")
+
+
+# rendering the visualization
+plt.show(block = True)
