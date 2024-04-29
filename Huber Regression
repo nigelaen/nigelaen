@@ -1,0 +1,128 @@
+#import libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import time
+
+#sklearn
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score
+from sklearn.linear_model import HuberRegressor
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import RandomizedSearchCV
+def llf_(y, X, pr):
+    # return maximized log likelihood
+    nobs = float(X.shape[0])
+    nobs2 = nobs / 2.0
+    nobs = float(nobs)
+    resid = y - pr
+    ssr = np.sum((resid)**2)
+    llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+    return llf
+
+def aic(y, X, pr, p):
+    # return aic metric
+    llf = llf_(y, X, pr)
+    return -2*llf+2*p
+
+def bic(y, pr, p):
+    
+    RSS = mean_squared_error(y,pr)
+    n = y.shape[0]
+    
+    return n*np.log(RSS) + p * np.log(n)
+def model_setup(x_data, y_data, seed = 1, tuning = True):
+    '''
+    Output the results of a trained Huber Regression model.
+
+            Parameters:
+                    x_data (dataframe): dataframe of predictors
+                    y_data (dataframe): dataframe of target variable
+                    seed (int): random seed number
+                    tuning (bool): whether to tune model or keep default hyperparameters
+
+            Outputs:
+                    r2_test (float): R^2 of the model for the test set
+                    r2_train (float): R^2 of the model for the train set
+                    r2_gap (float): R^2 difference between test and train
+                    aic_test (float): AIC criteria of the model for the test set
+                    aic_train (float): AIC criteria of the model for the train set
+                    bic_test (float): BIC criteria of the model for the test set
+                    bic_train (float): BIC criteria of the model for the train set
+                    coef (list): List of coefficients of the final model
+                    intercept (float): Intercept of the final model
+                    params (dictionary): Params of the final model
+                      
+    '''
+    
+    
+    #train_test_split
+    X_train, X_test, y_train, y_test = train_test_split(x_data, y_data, random_state = seed)
+    
+    #model
+    huber_reg = HuberRegressor()
+    
+    
+    #setup tuning
+    if tuning:
+        
+        tic = time.time()
+        # Corrected parameter grid for tuning
+        random_grid = {'epsilon': np.linspace(start=1, stop=X_train.shape[0] // 10, num=10).tolist(),  
+                        'alpha': np.linspace(start=0.00001, stop=0.001, num=20).tolist()}
+
+        random_search = RandomizedSearchCV(estimator = huber_reg, param_distributions = random_grid, \
+                                           n_iter = 1000, cv = 3, verbose = 2, random_state = seed, n_jobs = -1)
+        random_search.fit(X_train, y_train)
+        toc = time.time()
+        print(tic-toc)
+    
+    else:
+        random_search = huber_reg.fit(X_train, y_train)
+        
+    #scores
+    pred_test = random_search.predict(X_test)
+    pred_train = random_search.predict(X_train)
+    
+    r2_test = r2_score(y_test, pred_test)
+    r2_train = r2_score(y_train, pred_train)    
+    r2_gap = r2_train - r2_test
+    
+    p = 1 + x_data.shape[1]
+    aic_test = aic(y_test, X_test, pred_test, p)
+    aic_train = aic(y_train, X_train, pred_train, p)
+    
+    bic_test = bic(y_test, pred_test, p)
+    bic_train = bic(y_train, pred_train, p)
+    
+    coef = random_search.best_estimator_.coef_
+    intercept = random_search.best_estimator_.intercept_
+    params = random_search.best_params_
+    
+    #create a well-looking print here:
+    
+    print(f"Model Performance Summary:\n"
+      f"--------------------------\n"
+      f"R-Square (Training): {r2_train:.3f}\n"
+      f"R-Square (Testing): {r2_test:.3f}\n"
+      f"Train-Test Gap: {r2_gap:.3f}\n"
+      f"AIC (Training): {aic_train:.3f}\n"
+      f"AIC (Testing): {aic_test:.3f}\n"
+      f"BIC (Training): {bic_train:.3f}\n"
+      f"BIC (Testing): {bic_test:.3f}\n"
+      f"--------------------------\n")
+
+#reading the file
+path = './datasets/housing_feature_rich.xlsx'
+data = pd.read_excel(io = path)
+
+x_data = data.drop(['Sale_Price', 'log_Sale_Price'], axis = 1)
+y_data = data['Sale_Price']
+y_data_log = data['log_Sale_Price']
+
+model_setup(x_data = x_data, y_data = y_data, seed = 18, tuning = True)
+
+model_setup(x_data = x_data, y_data = y_data_log, seed = 18, tuning = True)
